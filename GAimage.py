@@ -6,10 +6,11 @@ import random as r
 import os
 import gc
 
+
 class Color(object):
-	'''
-	定义颜色的类，这个类包含r,g,b,a表示颜色属性
-	'''
+    '''
+    定义颜色的类，这个类包含r,g,b,a表示颜色属性
+    '''
     def __init__(self):
         self.r = r.randint(0, 255)
         self.g = r.randint(0, 255)
@@ -17,23 +18,23 @@ class Color(object):
         self.a = r.randint(95, 115)
 
 def mutate_or_not(rate):
-	'''
-	生成随机数，判断是否需要变异
-	'''
+    '''
+    生成随机数，判断是否需要变异
+    '''
     return True if rate > r.random() else False
 
 
 class Triangle(object):
-	'''
-	定义三角形的类
-	属性：
-		ax,ay,bx,by,cx,cy：表示每个三角形三个顶点的坐标
-		color 			 : 表示三角形的颜色
-		img_t			 : 三角形绘制成的图，用于合成图片
-	方法：
-		mutate_from(self, parent):      从父代三角形变异
-		draw_it(self, size=(256, 256)): 绘制三角形
-	'''
+    '''
+    定义三角形的类
+    属性：
+        ax,ay,bx,by,cx,cy：表示每个三角形三个顶点的坐标
+        color              : 表示三角形的颜色
+        img_t             : 三角形绘制成的图，用于合成图片
+    方法：
+        mutate_from(self, parent):      从父代三角形变异
+        draw_it(self, size=(256, 256)): 绘制三角形
+    '''
     max_mutate_rate = 0.08
     mid_mutate_rate = 0.3
     min_mutate_rate = 0.8
@@ -118,18 +119,18 @@ class Triangle(object):
 
 
 class Canvas(object):
-	'''
-	定义每一张图片的类
-	属性：
-		mutate_rate	 : 变异概率
-		size		 : 图片大小
-		target_pixels: 目标图片像素值
-	方法：
-		add_triangles(self, num=1)      : 在图片类中生成num个三角形
-		mutate_from_parent(self, parent): 从父代图片对象进行变异
-		calc_match_rate(self)			: 计算环境适应度
-		draw_it(self, i)				: 保存图片
-	'''
+    '''
+    定义每一张图片的类
+    属性：
+        mutate_rate     : 变异概率
+        size         : 图片大小
+        target_pixels: 目标图片像素值
+    方法：
+        add_triangles(self, num=1)      : 在图片类中生成num个三角形
+        mutate_from_parent(self, parent): 从父代图片对象进行变异
+        calc_match_rate(self)            : 计算环境适应度
+        draw_it(self, i)                : 保存图片
+    '''
     mutate_rate = 0.01
     size = (256, 256)
     target_pixels = []
@@ -161,7 +162,7 @@ class Canvas(object):
             a = Triangle()
             a.mutate_from(t)
             self.triangles.append(a)
-		
+        
     def calc_match_rate(self):
         if self.match_rate > 0:
             return self.match_rate
@@ -179,65 +180,62 @@ class Canvas(object):
             self.match_rate += delta_red   * delta_red   + \
                                delta_green * delta_green + \
                                delta_blue  * delta_blue
-            #print(self.match_rate)
+            # print(self.match_rate)
             
-    def draw_it(self, i):
-        self.img.save(os.path.join(PATH, "%s_%d_%d_%d.png"%(PREFIX,PREFIX, len(self.triangles), i,self.match_rate)))
+    def draw_it(self, i, path):
+        self.img.save(os.path.join(path, "%d_%d.png"%(i,self.match_rate)))
 
 
-def main():
-    global LOOP, PREFIX, PATH, TARGET, TRIANGLE_NUM
-	#声明全局变量
-    img = Image.open(TARGET).resize((256, 256)).convert('RGBA')
-    size = (256, 256)
+def main(inpName,
+    num_seed=20, num_tri=128, out_shape=(256, 256),
+    max_iter=10000, save_iter=100, save_path=None):
+    # 声明全局变量
+    img = Image.open(inpName).resize(out_shape).convert('RGBA')
+    size = out_shape
     target_img = [img.getpixel((x, y)) for x in range(0, size[0], 2) for y in range(0, size[1], 2)]
     Canvas.target_pixels = target_img
-    #生成一系列的图片作为父本，选择其中最好的一个进行遗传
+    # 生成一系列的图片作为父本，选择其中最好的一个进行遗传
     parentList = []
     for i in range(20):
         print('正在生成第%d个初代个体'%(i))
         parentList.append(Canvas())
-        parentList[i].add_triangles(TRIANGLE_NUM)
+        parentList[i].add_triangles(num_tri)
         parentList[i].calc_match_rate()
     parent = sorted(parentList,key = lambda x:x.match_rate)[0]
-    del parentList
-    gc.collect()
-	#进入遗传算法的循环
+    # 进入遗传算法的循环
     i = 0
-    while i<30000:
+    while i < max_iter:
         childList = []
-		#每一代从父代中变异出10个个体
+        # 每一代从父代中变异出10个个体
         for j in range(10):
             childList.append(Canvas())
             childList[j].mutate_from_parent(parent)
             childList[j].calc_match_rate()
         child = sorted(childList,key = lambda x:x.match_rate)[0]
-		#选择其中适应度最好的一个个体
-        del childList
-        gc.collect()
+        # 选择其中适应度最好的一个个体
         parent.calc_match_rate()
         print ('%10d parent rate %11d \t child1 rate %11d' % (i, parent.match_rate, child.match_rate))
         parent = parent if parent.match_rate < child.match_rate else child
-		#如果子代比父代更适应环境，那么子代成为新的父代
-		#否则保持原样
+        # 如果子代比父代更适应环境，那么子代成为新的父代
+        # 否则保持原样
         child = None
-        if i % LOOP == 0:
-			#每隔LOOP代保存一次图片
-            parent.draw_it(i)
+        if i % save_iter == 0:
+            # 每隔LOOP代保存一次图片
+            parent.draw_it(i, save_path)
             print(parent.match_rate)
         i += 1
 
-'''
-定义全局变量，获取待处理的图片名
-'''
-NAME = input('请输入原图片文件名：')
-LOOP = 100
-PREFIX = NAME.split('/')[-1].split('.')[0]   #取文件名
-PATH = os.path.abspath('.')                     #取当前路径
-TARGET = NAME  #源图片文件名
-TRIANGLE_NUM = 128  #三角形个数
-
-
 if __name__ == '__main__':
     print('开始进行遗传算法')
-    main()
+    import argparse
+    parser = argparse.ArgumentParser()
+    parser.add_argument('-i', '--input', type=str, default='data/head.jpg')
+    parser.add_argument('-o', '--out', type=str, default='output')
+    parser.add_argument('-l', '--loop', type=int, default=100)
+    parser.add_argument('-n', '--num', type=int, default=128)
+
+    args = parser.parse_args()
+    import os
+    save_path = args.out
+    os.makedirs(save_path, exist_ok=True)
+    main(args.input, num_tri=args.num, save_path=save_path)
