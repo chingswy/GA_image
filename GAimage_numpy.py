@@ -45,7 +45,7 @@ class Canvas:
 
     def calc_match_rate(self, ref_img):
         rgb, count = self.draw()
-        rgb_loss = np.abs(ref_img - rgb).sum()
+        rgb_loss = np.abs(ref_img - rgb).mean()
         self.match_rate = rgb_loss
 
     @classmethod
@@ -59,10 +59,12 @@ class Canvas:
         child.colors += np.random.rand(
             child.colors.shape[0], child.colors.shape[1])*rate_color\
             - rate_color/2
+        child.colors[child.colors>1] = 1
+        child.colors[child.colors<0] = 0
         return child
 
 def main(inpName, out_shape=(256, 256),
-    num_seed=100, num_tri=128, num_child=20,
+    num_seed=100, num_tri=128, num_parent=10, 
     max_iter=10000, save_iter=20, save_path=None):
     # 声明全局变量
     img = cv2.imread(inpName)
@@ -71,35 +73,40 @@ def main(inpName, out_shape=(256, 256),
     # 生成一系列的图片作为父本，选择其中最好的一个进行遗传
     parentList = []
     for i in range(num_seed):
-        print('正在生成第%d个初代个体'%(i))
         parent = Canvas(size=out_shape)
         parent.calc_match_rate(img)
+        print('正在生成第{:02d}个初代个体 {:.3f}:'.format(i, parent.match_rate))
         parentList.append(parent)
-    parent = sorted(parentList,key = lambda x:x.match_rate)[0]
+    parents = sorted(parentList,key = lambda x:x.match_rate)[:num_parent]
     # 进入遗传算法的循环
     i = 0
     while i < max_iter:
         childList = []
         # 遗传变异
-        for rate_posi, rate_color in itertools.product(
-            [0.1, 0.3, 0.5, 0.7, 1], [0.1, 0.3, 0.5, 0.7, 1]):
-            child = Canvas.mutate(parent, rate_posi, rate_color)
-            child.calc_match_rate(img)
-            childList.append(child)
+        for parent in parents:
+            for rate_posi, rate_color in itertools.product(
+                [0.1, 0.3, 0.5], [0.1, 0.3, 0.5]):
+                child = Canvas.mutate(parent, rate_posi, rate_color)
+                child.calc_match_rate(img)
+                childList.append(child)
         # 交叉变异
-        # TODO:
-        child = sorted(childList,key = lambda x:x.match_rate)[0]
-        print ('%10d parent rate %11d \t child1 rate %.3f' % (i, parent.match_rate, child.match_rate))
-        parent = parent if parent.match_rate < child.match_rate else child
-        # 如果子代比父代更适应环境，那么子代成为新的父代
-        # 否则保持原样
+
+        # 加上父辈的
+        childList.extend(parents)
+        # 排序选择
+        child = sorted(childList,key = lambda x:x.match_rate)[:2*num_parent:2]
+        print ('{:5d} parent {:.3f}, child rate {}'.format(
+            i, parents[0].match_rate,
+            ' '.join(['{:.3f}'.format(it.match_rate) for it in child])))
+        parents = child
         child = None
         if i % save_iter == 0:
             # 每隔LOOP代保存一次图片
-            rgb, count = parent.draw()
-            out = (rgb*255).astype(np.uint8)[:, :, ::-1]
-            cv2.imwrite(os.path.join(save_path, '%06d.jpg'%(i)), out)
-            print(parent.match_rate)
+            for ip in range(num_parent):
+                rgb, count = parents[ip].draw()
+                out = (rgb*255).astype(np.uint8)
+                cv2.imwrite(os.path.join(save_path, '%06d_%02d.jpg'%(i, ip)), out)
+                print(parents[ip].match_rate)
         i += 1
     
 if __name__ == "__main__":
@@ -115,4 +122,5 @@ if __name__ == "__main__":
     import os
     save_path = args.out
     os.makedirs(save_path, exist_ok=True)
-    main(args.input, num_tri=args.num, save_path=save_path)
+    main(args.input, num_tri=args.num, 
+        save_path=save_path, save_iter=args.loop)
