@@ -1,6 +1,6 @@
 import numpy as np
 import cv2
-
+import itertools
 class Canvas:
     def __init__(self, num_tri=128, size=(256, 256)):
         coords = np.mgrid[0:size[0], 0:size[1]]
@@ -49,19 +49,21 @@ class Canvas:
         self.match_rate = rgb_loss
 
     @classmethod
-    def mutate(cls, parent):
+    def mutate(cls, parent, rate_posi=0.1, rate_color=0.1):
         child = cls(parent.num_tri, parent.size)
         child.position = parent.position.copy()
         child.colors = parent.colors.copy()
         child.position[:, :, :2] += np.random.rand(
-            child.position.shape[0], child.position.shape[1], 2)*0.1
+            child.position.shape[0], child.position.shape[1], 2)*rate_posi \
+            - rate_posi/2
         child.colors += np.random.rand(
-            child.colors.shape[0], child.colors.shape[1])*0.1
+            child.colors.shape[0], child.colors.shape[1])*rate_color\
+            - rate_color/2
         return child
 
 def main(inpName, out_shape=(256, 256),
     num_seed=100, num_tri=128, num_child=20,
-    max_iter=10000, save_iter=100, save_path=None):
+    max_iter=10000, save_iter=20, save_path=None):
     # 声明全局变量
     img = cv2.imread(inpName)
     img = cv2.resize(img, out_shape)
@@ -78,11 +80,14 @@ def main(inpName, out_shape=(256, 256),
     i = 0
     while i < max_iter:
         childList = []
-        # 每一代从父代中变异出10个个体
-        for j in range(num_child):
-            child = Canvas.mutate(parent)
+        # 遗传变异
+        for rate_posi, rate_color in itertools.product(
+            [0.1, 0.3, 0.5, 0.7, 1], [0.1, 0.3, 0.5, 0.7, 1]):
+            child = Canvas.mutate(parent, rate_posi, rate_color)
             child.calc_match_rate(img)
             childList.append(child)
+        # 交叉变异
+        # TODO:
         child = sorted(childList,key = lambda x:x.match_rate)[0]
         print ('%10d parent rate %11d \t child1 rate %.3f' % (i, parent.match_rate, child.match_rate))
         parent = parent if parent.match_rate < child.match_rate else child
